@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: newspaper-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: newspaper-app
+  template:
+    metadata:
+      labels:
+        app: newspaper-app
+    spec:
+      containers:
+        - name: newspaper-app
+          image: farhadevan/newspaper-app:latest
+          ports:
+            - containerPort: 80
