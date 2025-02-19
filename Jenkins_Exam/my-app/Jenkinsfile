@@ -1,0 +1,78 @@
+pipeline {
+    agent any
+
+    environment {
+        DOCKERHUB_CREDENTIALS = credentials('dockerhub-creds')
+        IMAGE_NAME = 'https://hub.docker.com/u/farhadevan/my-app'
+        DOCKER_COMPOSE_FILE = '/var/www/app/docker-compose.yaml'
+    }
+
+    triggers {
+        genericTrigger(
+            causeString: 'Merge request accepted from dev -> main',
+            token: 'merge_trigger_token',
+            printPostContent: true
+        )
+    }
+
+    stages {
+        stage('Clone Repository') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    def buildTime = new Date().format('dd-MM-HH-mm')
+                    def buildNumber = currentBuild.number
+                    def imageTag = "${buildNumber}-${buildTime}"
+                    env.IMAGE_TAG = imageTag
+                    sh "docker build -t ${IMAGE_NAME}:${imageTag} ."
+                }
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                script {
+                    sh "echo ${DOCKERHUB_CREDENTIALS_PSW} | docker login -u ${DOCKERHUB_CREDENTIALS_USR} --password-stdin"
+                    sh "docker push ${IMAGE_NAME}:${IMAGE_TAG}"
+                }
+            }
+        }
+
+        stage('Clean Up') {
+            steps {
+                sh 'docker logout'
+                sh 'docker system prune -af'
+            }
+        }
+
+        stage('Update Docker Compose File') {
+            steps {
+                script {
+                    sh "sed -i 's|image: .*|image: ${IMAGE_NAME}:${IMAGE_TAG}|' ${DOCKER_COMPOSE_FILE}"
+                }
+            }
+        }
+
+        stage('Restart Docker Compose') {
+            steps {
+                script {
+                    sh "cd /var/www/my-app && docker-compose down && docker-compose up -d"
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            script {
+                def message = "Your application has been updated, \nImagename: ${IMAGE_NAME}:${IMAGE_TAG}"
+                sh "curl -X POST -H 'Content-Type: application/json' --data '{"text": "${message}"}' YOUR_GOOGLE_CHAT_WEBHOOK_URL"
+            }
+        }
+    }
+}
