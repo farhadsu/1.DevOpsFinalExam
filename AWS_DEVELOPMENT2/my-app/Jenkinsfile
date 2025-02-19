@@ -1,0 +1,10 @@
+stage('Deploy') {
+    steps {
+        sh '''
+        cd /var/www/my-app
+        docker-compose down
+        docker-compose pull
+        docker-compose up -d
+        '''
+    }
+}
